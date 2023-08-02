@@ -4,6 +4,7 @@ import (
   "monkey/ast"
   "monkey/lexer"
   "monkey/token"
+  "fmt"
 )
 
 type Parser struct {
@@ -12,10 +13,12 @@ type Parser struct {
   curToken token.Token
 
   peekToken token.Token
+
+  errors []string
 }
 
 func New(l *lexer.Lexer) *Parser {
-  p := &Parser{l: l}
+  p := &Parser{l: l, errors: []string{}}
 
   // read two tokens, so curToken and peekToken are both set
 
@@ -24,6 +27,10 @@ func New(l *lexer.Lexer) *Parser {
   p.nextToken()
 
   return p
+}
+
+func (p *Parser) Errors() []string {
+  return p.errors
 }
 
 func (p *Parser) nextToken() {
@@ -54,25 +61,45 @@ func (p *Parser) parseStatement() ast.Statement {
   switch p.curToken.Type {
   case token.LET:
     return p.parseLetStatement()
+  case token.RETURN:
+    return p.parseReturnStatement()
   default:
     return nil
   }
 }
 
 func (p *Parser) parseLetStatement() *ast.LetStatement {
+  // record the LET statement ('let')
   stmt := &ast.LetStatement{Token: p.curToken}
 
+  // if it is NOT an identifier, return nil;
   if !p.expectPeek(token.IDENT) {
     return nil
   }
 
+  // record the IDENTIFIER statment ('let >> n <<')
   stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 
+  // if it is not an assignment, return nul
   if !p.expectPeek(token.ASSIGN) {
     return nil
   }
 
   // TODO: We're skipping the expressions until we encounter a semicolon
+
+  // if it is not a semicolon
+  for !p.curTokenIs(token.SEMICOLON) {
+    p.nextToken()
+  }
+
+  return stmt
+}
+
+func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
+  stmt := &ast.ReturnStatement{Token: p.curToken}
+  p.nextToken()
+
+  // TODO: We're skipping the expwressions until we encounter a semicolon
 
   for !p.curTokenIs(token.SEMICOLON) {
     p.nextToken()
@@ -94,8 +121,15 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
     p.nextToken()
     return true
   } else {
+    p.peekError(t)
     return false
   }
+}
+
+func (p* Parser) peekError(t token.TokenType) {
+  msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
+
+  p.errors = append(p.errors, msg)
 }
 
 
